@@ -1,0 +1,148 @@
+#lang racket
+
+;The amount spent on this project is 62 hours.
+
+(require racket/draw) ; graphic library
+(require colors) ;  colors library
+
+
+;========== set the size of frame
+(define imageWidth 2048) ; image size
+(define imageHeight 1152)
+
+;========== draw image on screen
+(define target (make-bitmap imageWidth imageHeight))
+(define dc (new bitmap-dc% [bitmap target])) 
+
+;========== counter
+(define c 0)
+(define ssf 10000000) ; some very large number
+(define (polySize inpoly)
+  (define-values (l t w h) (send inpoly get-bounding-box))
+  ;  (printf "bounding box: ~v ~v ~v ~v.\n" l t w h)
+  (max w h))
+
+;========== draw background color - a screen sized rectangle
+(send dc set-pen (hsv->color(hsv 0.5 1.0 0.6)) 2 'solid) ; pen color line_width fill_mode
+(send dc set-brush (hsv->color(hsv 0.4 0.4 1.0)) 'solid)  ; fill color line_width fill_mode
+(send dc draw-rectangle
+      0 0   ; 
+      imageWidth imageHeight)
+
+;========== create shape
+(define (createPolygon)
+  (define polygon (new dc-path%))
+  (send polygon move-to 0 0) ; create polygon
+  (send polygon line-to 30 20) ; the origin of the image is at zero x and zero y
+  (send polygon line-to 40 50) ; which is the upper left corner of the image
+  (send polygon close)
+  polygon
+  )
+
+;========== define a polygon
+(define (drawToScreen polygon scaleX scaleY translateX translateY r hue)
+  
+  (send polygon scale scaleX scaleY) ; polygon scale
+  (send polygon translate translateX translateY)
+  
+  ;  (when (< (polySize polygon) ssf)
+  ;    (set! ssf (polySize polygon))
+  ;    (printf "smallest so far: ~v.\n" ssf))
+
+  (send dc draw-path polygon)
+  (send polygon translate (* -1 translateX) (* -1 translateY)) 
+  (send polygon scale (/ 1 scaleX) (/ 1 scaleY)) ; polygon scale
+  (send polygon rotate r)
+  ; set color for polygons
+  (send dc set-pen (hsv->color(hsv hue 0.8 0.3 0.4)) 1 'solid)
+  (send dc set-brush (hsv->color(hsv hue 0.3 0.5 0.7)) 'solid)
+  )
+
+(define (scaleTweak i)
+  ; i goes from 1 to iterations - 500 for now
+  ; if i is 1 return 1
+  ; if i is iterations return 0
+  (let* ((tweak1 0.01) ; bigger numbers mean slower start
+         (iterations 499.9)
+         (tnum (/ (- i 1) (- iterations 1))) ; tnum goes from 0 to 1
+         )
+    ;    (when (> i 498)
+    ;      (printf "i: ~v   scale: ~v .\n" i (- 1.0 (expt tnum tweak1))))
+    
+    (- 1.0 (expt tnum tweak1))
+    ))
+
+;========== create multiple polygons in circle
+(define (createFractal r)
+  ; (if (> r (+ (* 2 pi) .01))
+  #t
+  (begin
+    (let ([myFractal (createPolygon)])
+      ;(drawToScreen myFractal 0.5 0.5 256 144 r)
+      (define rangeNumber 600)
+      (define adjustNumber (exact-floor(/ imageWidth rangeNumber)))
+         
+      (for ([j (in-range 1 500 0.009)])
+        (set! c (+ c 1))
+        ;     (drawToScreen myFractal (/ 200 (* .5 j)) (/ 200 (* .5 j)) (* j 1.2) (* j 1.2) r (/ j 501)))
+        (drawToScreen myFractal (* 400 (scaleTweak j)) (* 400 (scaleTweak j)) (* j 1.2) (* j 1.2) r (/ j 501))
+
+        ;  (begin
+        ;    (createFractal (+ r .45))
+        ;    #t
+        ;   )
+        ; )
+        ))))
+
+;======== code from Professor
+(define xScaleReally 1.0)
+(define yScaleReally 1.0)
+(define xTranslateReally 0.0)
+(define yTranslateReally 0.0)
+
+(define (reallyDrawToScreen polygon)
+
+  (send polygon scale xScaleReally yScaleReally) ; polygon scale
+  (send polygon translate xTranslateReally yTranslateReally)
+  (send dc draw-path polygon)
+  (send polygon translate (* -1 xTranslateReally) (* -1 yTranslateReally))
+  (send polygon scale (/ 1 xScaleReally) (/ 1 yScaleReally)) ; polygon scale
+  )
+;======== end code from Professor
+
+
+(define imageQty 30)
+
+(define zoomPoint 600) ; x & y zoom too 600,600
+(define leftBias (/ zoomPoint 2048))
+(define rightBias (- 1 leftBias))
+(define topBias (/ zoomPoint 1152))
+(define botBias (- 1 topBias))
+
+(define widthStepNum (exact-floor (/ imageWidth imageQty)))
+(define heightStepNum (exact-floor (/ imageHeight imageQty)))
+
+(define leftStepNum (exact-floor (* widthStepNum leftBias)))
+(define rightStepNum (exact-floor (* widthStepNum rightBias)))
+(define topStepNum (exact-floor (* heightStepNum topBias)))
+(define botStepNum (exact-floor (* heightStepNum botBias)))
+  
+(for ([i (in-range imageQty)])
+  ; Clean image
+
+  (set! target (make-bitmap imageWidth imageHeight))
+  (set! imageWidth (- imageWidth widthStepNum))
+  (set! imageHeight (- imageHeight heightStepNum))
+  (set! dc (new bitmap-dc% [bitmap target]))
+  (createFractal (- (+ (* 1 pi) .02) .06))
+  ;(define outName (format "gen/image-~a.png" (+ i 1))) ; folder and files saved
+ ; (send target save-file outName 'png)
+  )
+target
+
+; (define outName (format "genWatita/im.png"))
+; (send target save-file outName 'png)
+; 
+; (createFractal (- (+ (* 1 pi) .02) .06))
+; (set! outName (format "gen/image2.png"))
+; (send target save-file outName 'png)
